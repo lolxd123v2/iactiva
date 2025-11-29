@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente de Facturación - Full Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { 'sunat-primary': '#1e40af', 'sunat-secondary': '#d1d5db' }
+                }
+            }
+        }
+    </script>
+    <style>
+        .invoice-container { border: 1px solid #d1d5db; padding: 1.5rem; border-radius: 0.5rem; min-height: 20rem; }
+        @media print { .no-print { display: none !important; } .invoice-container { border: none; padding: 0; } }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4 font-sans">
+
+    <div id="loading-overlay" class="no-print">
+        <div class="flex flex-col items-center space-y-3">
+            <div class="w-12 h-12 border-4 border-sunat-primary border-t-transparent border-solid rounded-full animate-spin"></div>
+            <span class="text-xl font-medium text-sunat-primary">Procesando en Backend Python...</span>
+        </div>
+    </div>
+
+    <div class="w-full max-w-4xl bg-white p-6 rounded-xl shadow-2xl space-y-6">
+        <header class="text-center pb-4 border-b no-print">
+            <h1 class="text-3xl font-bold text-sunat-primary">Agente de Facturación (Python Backend)</h1>
+            <p class="text-gray-500 mt-1">El texto viaja al backend, Python calcula y devuelve el JSON.</p>
+        </header>
+
+        <div class="no-print">
+            <label for="prompt" class="block text-sm font-medium text-gray-700 mb-2">Solicitud de Factura</label>
+            <textarea id="prompt" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-sunat-primary resize-none" placeholder="Ej: Factura para Intelica RUC 20555555551 por 5 licencias a 100 soles."></textarea>
+            <div id="message-box" class="mt-3 p-3 text-sm rounded-lg hidden"></div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-4 no-print">
+            <button id="generate-btn" type="button" class="flex-1 bg-sunat-primary text-white font-bold py-3 rounded-lg hover:bg-blue-800 shadow-md">
+                <i class="fas fa-server mr-2"></i> Enviar a Backend
+            </button>
+            <button id="json-export-btn" type="button" disabled class="flex-1 bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 shadow-md disabled:opacity-50">
+                <i class="fas fa-file-download mr-2"></i> Descargar JSON
+            </button>
+            <button id="print-pdf-btn" type="button" disabled class="flex-1 bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 shadow-md disabled:opacity-50" onclick="window.print()">
+                <i class="fas fa-print mr-2"></i> Imprimir PDF
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t mt-4">
+            <div class="lg:col-span-1">
+                <h2 class="text-lg font-bold text-gray-800 mb-3 border-b pb-1 no-print">Vista Previa</h2>
+                <div id="invoice-preview" class="invoice-container bg-white">
+                    <p class="text-center text-gray-400 p-8">Esperando respuesta del servidor...</p>
+                </div>
+            </div>
+            <div class="lg:col-span-1 no-print">
+                <h2 class="text-lg font-bold text-gray-800 mb-3 border-b pb-1">Respuesta del Backend (JSON)</h2>
+                <pre id="json-output" class="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto min-h-[20rem]">Esperando...</pre>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- CONFIGURACIÓN ---
+        // Apuntamos al servidor Flask local
+        const API_URL = "http://localhost:5001/api/generar-factura";
+        
+        let finalInvoiceData = null;
+        
+        const promptEl = document.getElementById('prompt');
+        const generateBtn = document.getElementById('generate-btn');
+        const jsonExportBtn = document.getElementById('json-export-btn');
+        const printPdfBtn = document.getElementById('print-pdf-btn');
+        const jsonOutput = document.getElementById('json-output');
+        const invoicePreview = document.getElementById('invoice-preview');
+        const messageBox = document.getElementById('message-box');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        function displayMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.className = `mt-3 p-3 text-sm rounded-lg ${isError ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`;
+            messageBox.classList.remove('hidden');
+        }
+
+        // --- RENDERIZADO (IGUAL QUE ANTES) ---
+        function renderInvoiceHtml(data) {
+            const { cliente, ruc_simulado, fecha_emision, items, subtotal, igv, total, moneda } = data;
+            
+            let itemsHtml = items.map(item => `
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                    <td class="p-2 text-center">${item.cantidad}</td>
+                    <td class="p-2 text-left">${item.descripcion}</td>
+                    <td class="p-2 text-right">${moneda} ${item.precio_unitario_sin_igv.toFixed(2)}</td>
+                    <td class="p-2 text-right font-medium">${moneda} ${item.sub_total_item.toFixed(2)}</td>
+                </tr>
+            `).join('');
+
+            invoicePreview.innerHTML = `
+                <div class="p-4 bg-white font-sans text-gray-800">
+                    <div class="flex justify-between items-start mb-6 border-b pb-3">
+                        <div>
+                            <p class="text-lg font-bold">EMPRESA PYTHON BACKEND S.A.C.</p>
+                            <p class="text-sm text-gray-600">RUC: 10123456789</p>
+                        </div>
+                        <div class="text-right border border-sunat-primary p-2 rounded-md bg-blue-50">
+                            <h2 class="text-xl font-extrabold text-sunat-primary">FACTURA ELECTRÓNICA</h2>
+                            <p class="text-sm font-semibold">F001-00000001</p>
+                        </div>
+                    </div>
+                    <div class="p-3 border border-gray-200 rounded-md mb-6 text-sm bg-gray-50">
+                        <p><strong>CLIENTE:</strong> ${cliente}</p>
+                        <p><strong>RUC:</strong> ${ruc_simulado}</p>
+                        <p><strong>FECHA:</strong> ${fecha_emision}</p>
+                    </div>
+                    <table class="w-full text-sm border border-gray-300 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-200 text-gray-700 uppercase">
+                            <tr><th class="p-2">Cant.</th><th class="p-2 text-left">Descripción</th><th class="p-2 text-right">P. Unit.</th><th class="p-2 text-right">Total</th></tr>
+                        </thead>
+                        <tbody>${itemsHtml}</tbody>
+                    </table>
+                    <div class="flex justify-end mt-6 text-right">
+                        <div class="w-1/2 space-y-2">
+                            <p><strong>Subtotal:</strong> ${moneda} ${subtotal.toFixed(2)}</p>
+                            <p class="text-red-600"><strong>IGV (${data.igv_porcentaje}%):</strong> ${moneda} ${igv.toFixed(2)}</p>
+                            <p class="text-xl font-bold text-sunat-primary border-t pt-2">Total: ${moneda} ${total.toFixed(2)}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- LÓGICA PRINCIPAL ---
+        async function generateInvoice() {
+            const promptText = promptEl.value.trim();
+            if (!promptText) return displayMessage("Escribe una solicitud.", true);
+
+            generateBtn.disabled = true;
+            loadingOverlay.style.display = 'flex';
+            messageBox.classList.add('hidden');
+
+            try {
+                // LLAMADA AL BACKEND PYTHON
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                if (!response.ok) throw new Error("Error en el servidor Python");
+
+                finalInvoiceData = await response.json();
+
+                // Renderizar
+                jsonOutput.textContent = JSON.stringify(finalInvoiceData, null, 2);
+                renderInvoiceHtml(finalInvoiceData);
+                
+                jsonExportBtn.disabled = false;
+                printPdfBtn.disabled = false;
+                displayMessage("¡Factura procesada por Python correctamente!");
+
+            } catch (error) {
+                console.error(error);
+                displayMessage(`Error: ${error.message}. ¿Está corriendo app.py?`, true);
+                jsonOutput.textContent = "Error de conexión con localhost:5001";
+            } finally {
+                loadingOverlay.style.display = 'none';
+                generateBtn.disabled = false;
+            }
+        }
+
+        // Event Listeners
+        generateBtn.addEventListener('click', generateInvoice);
+        jsonExportBtn.addEventListener('click', () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalInvoiceData, null, 2));
+            const link = document.createElement("a");
+            link.href = dataStr;
+            link.download = `factura_${Date.now()}.json`;
+            link.click();
+        });
+    </script>
+</body>
+</html>
