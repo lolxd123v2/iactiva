@@ -33,10 +33,7 @@ Esta aplicación permite generar facturas electrónicas según los estándares d
    pip install flask-cors
    
 
-3. Crea un archivo .env en la raíz del proyecto con tu clave de API de Google Gemini:
-   
-   GEMINI_API_KEY=tu_clave_aquí
-   
+
 
 ## Uso
 
@@ -69,9 +66,7 @@ Esta aplicación permite generar facturas electrónicas según los estándares d
 ## Estructura del Proyecto
 
 - app.py: Aplicación principal con la lógica de negocio y la API web
-- factura_pdf.py: Clase para generar facturas en formato PDF
-- invoice_agent.py: Módulo para interactuar con la API de Google Gemini
-- Cuestionario.html: Interfaz de usuario web (si está implementada)
+- Cuestionario.html: Interfaz de usuario web
 
 ## Formato de Salida
 

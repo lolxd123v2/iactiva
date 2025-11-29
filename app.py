@@ -8,13 +8,10 @@ import os
 
 app = Flask(__name__)
 
-# --- SOLUCIÓN ERROR CORS ---
-# Permitimos conexiones desde cualquier origen (*) para evitar el error de bloqueo
-# al abrir el archivo localmente o desde otro puerto.
+
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# --- CONFIGURACIÓN ---
-# 🛑 ¡IMPORTANTE! PEGA TU API KEY DE GOOGLE GEMINI AQUÍ ABAJO
+#CONFIGURACIÓN
 API_KEY = "AIzaSyDeRizFJtUiyOjpTafp4ZMtdffWclmj6nU" 
 
 GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"
@@ -22,7 +19,6 @@ API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODE
 MAX_RETRIES = 3
 IGV_RATE = 0.18
 
-# Prompt del Sistema (Instrucciones para la IA)
 SYSTEM_PROMPT = """
 Actúa como un asistente contable y agente de facturación de estilo SUNAT en Perú. 
 Tu tarea es extraer los datos clave de facturación del texto proporcionado y devolver la información ESTRICTAMENTE en el formato JSON definido en el esquema.
@@ -31,7 +27,6 @@ Tu tarea es extraer los datos clave de facturación del texto proporcionado y de
 3. Extrae la moneda (S/ o $), si no se menciona asume 'S/'.
 """
 
-# Esquema de respuesta esperado
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -55,8 +50,6 @@ RESPONSE_SCHEMA = {
     "required": ["cliente", "ruc_simulado", "items_extraidos"]
 }
 
-# --- FUNCIONES AUXILIARES ---
-
 def call_gemini_api(prompt):
     """Conecta con Google Gemini para extraer datos"""
     if API_KEY == "TU_API_KEY_AQUI" or not API_KEY:
@@ -77,9 +70,8 @@ def call_gemini_api(prompt):
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.post(url_with_key, json=payload)
-            response.raise_for_status() # Lanza error si no es 200 OK
+            response.raise_for_status()
             
-            # Parsear respuesta
             json_text = response.json()['candidates'][0]['content']['parts'][0]['text']
             return json.loads(json_text)
         except Exception as e:
