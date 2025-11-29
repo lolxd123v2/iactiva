@@ -30,6 +30,7 @@ Esta aplicación permite generar facturas electrónicas según los estándares d
 2. Instala las dependencias:
    bash
    pip install fpdf requests python-dotenv
+   pip install flask-cors
    
 
 3. Crea un archivo .env en la raíz del proyecto con tu clave de API de Google Gemini:
